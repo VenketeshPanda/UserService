@@ -47,4 +47,10 @@ public class UserController {
         return UserDTO.from(user);
     }
 
+    @GetMapping("/hello/from/userservice")
+    public String sayHi(@PathVariable Long id){
+        System.out.println("Got the request from PS to US");
+        return null;
+    }
+
 }
