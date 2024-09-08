@@ -1,5 +1,9 @@
 package dev.venketesh.userservice.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.venketesh.userservice.configs.KafkaProducerConfig;
+import dev.venketesh.userservice.dto.SendEmailMessageDTO;
 import dev.venketesh.userservice.exceptions.UserNotFoundException;
 import dev.venketesh.userservice.models.Token;
 import dev.venketesh.userservice.models.User;
@@ -8,6 +12,7 @@ import dev.venketesh.userservice.repository.UserRepository;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jmx.export.notification.UnableToSendNotificationException;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -23,14 +28,22 @@ public class UserService {
     private BCryptPasswordEncoder bCryptPasswordEncoder;
     private UserRepository userRepository;
     private TokenRepository tokenRepository;
-
+    private KafkaTemplate<String,String> kafkaTemplate;
+    private KafkaProducerConfig kafkaProducerConfig;
+    private ObjectMapper objectMapper;
 
     public UserService(BCryptPasswordEncoder bCryptPasswordEncoder,
                        UserRepository userRepository,
-                       TokenRepository tokenRepository){
+                       TokenRepository tokenRepository,
+                       KafkaTemplate<String,String> kafkaTemplate,
+                       ObjectMapper objectMapper,
+                       KafkaProducerConfig kafkaProducerConfig){
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.userRepository=userRepository;
+        this.kafkaTemplate=kafkaTemplate;
         this.tokenRepository=tokenRepository;
+        this.objectMapper=objectMapper;
+        this.kafkaProducerConfig=kafkaProducerConfig;
     }
 
     public User signup(String email, String name, String password){
@@ -40,7 +53,23 @@ public class UserService {
         user.setHashedPassword(bCryptPasswordEncoder.encode(password));
         user.setEmailVerified(true);
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        SendEmailMessageDTO sendEmailMessageDTO=new SendEmailMessageDTO();
+        sendEmailMessageDTO.setTo(savedUser.getEmail());
+        sendEmailMessageDTO.setFrom("venketeshpanda1999@gmail.com");
+        sendEmailMessageDTO.setSubject("Hellleewwwww <3");
+        sendEmailMessageDTO.setBody("I am trying out something in my project, uske chakkar me mail aya hei yeh..");
+        try {
+            kafkaProducerConfig.publishEventToKafka(
+                    "sendEmail",
+                    objectMapper.writeValueAsString(sendEmailMessageDTO)
+
+            );
+
+        } catch (Exception e){
+            throw new RuntimeException("Error sending email: "+e);
+        }
+        return savedUser;
     }
 
 
